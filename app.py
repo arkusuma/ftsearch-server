@@ -31,7 +31,7 @@ def search():
     except:
         return json.dump({'total': 0})
 
-@app.route('/api/link/<id:re:.*>')
+@app.route('/api/link/<id:path>')
 def link(id):
     try:
         response.content_type = 'application/json'
