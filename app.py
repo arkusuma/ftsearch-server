@@ -1,12 +1,24 @@
+# -*- coding: utf-8 -*-
+
+"""
+Copyright (c) 2012, Anugrah Redja Kusuma <anugrah.redja@gmail.com>
+
+Utilization of the works is permitted provided that this
+instrument is retained with the works, so that any entity
+that utilizes the works is notified of this instrument.
+
+DISCLAIMER: THE WORKS ARE WITHOUT WARRANTY.
+"""
+
 import bottle
 from bottle import request, response
 
 import sys
-import urllib2
 import json
 import re
 
-from HTMLParser import HTMLParser
+from urllib2 import urlopen, URLError, HTTPError
+from HTMLParser import HTMLParser, HTMLParseError
 from htmlentitydefs import name2codepoint
 
 app = bottle.Bottle()
@@ -18,31 +30,34 @@ def home():
 @app.route('/api/search')
 def search():
     try:
-        response.content_type = 'application/json'
-        resp = urllib2.urlopen(
-                'http://www.filestube.com/search.html?%s' % 
-                request.query_string)
-        html = resp.read().decode('utf-8').replace('&nbsp;', ' ')
-
+        # load search result
+        query = request.query_string
+        resp = urlopen('http://www.filestube.com/search.html?%s' % query)
+        html = resp.read().decode('utf-8')
+        # parse
         parser = SearchParser()
         parser.feed(html)
         result = {'total': parser.total, 'index': parser.index, 'items': parser.items}
-        return json.dumps(result)
-    except:
-        return json.dump({'total': 0})
+    except (URLError, HTTPError, HTMLParseError):
+        result = {'total': 0}
+    response.content_type = 'application/json'
+    return json.dumps(result)
 
 @app.route('/api/link/<id:path>')
 def link(id):
     try:
-        response.content_type = 'application/json'
-        resp = urllib2.urlopen('http://www.filestube.com/%s' % id)
+        # load download link
+        resp = urlopen('http://www.filestube.com/%s' % id)
         html = resp.read().decode('utf-8')
+        # parse
         parser = LinkParser()
         parser.feed(html)
-        result = [{'name': x[0], 'link': x[1]} for x in zip(parser.names, parser.links)]
-        return json.dumps(result)
-    except:
-        return json.dumps([])
+        result = [{'name': name, 'link': link} \
+                for name, link in zip(parser.names, parser.links)]
+    except (URLError, HTTPError, HTMLParseError):
+        result = []
+    response.content_type = 'application/json'
+    return json.dumps(result)
 
 class SearchParser(HTMLParser):
     def __init__(self):
@@ -58,11 +73,11 @@ class SearchParser(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
-        if self._text != None:
+        if self._text is not None:
             self._handle_text()
         if tag == 'div' and attrs.get('id') == 'newresult':
             self._item = {}
-        elif self._item != None:
+        elif self._item is not None:
             self._tags.append({'tag': tag, 'attrs': attrs})
             if tag == 'a' and len(self._tags) == 1:
                 href = attrs.get('href', '')
@@ -73,9 +88,9 @@ class SearchParser(HTMLParser):
             self._in_span = True
 
     def handle_endtag(self, tag):
-        if self._text != None:
+        if self._text is not None:
             self._handle_text()
-        if self._item != None:
+        if self._item is not None:
             if len(self._tags) == 0:
                 self.items.append(self._item)
                 self._item = None
@@ -92,8 +107,8 @@ class SearchParser(HTMLParser):
         if len(self._tags) == 1 and self._tags[-1]['tag'] == 'a':
             self._item['title'] = text
         elif len(self._tags) == 2 and self._tags[-1]['tag'] == 'span':
-            m = re.search('(\d+ [KMG]B)\s+date:\s+(\d+-\d+-\d+)', text)
-            if m != None:
+            m = re.search(r'(\d+ [KMG]B)\s+date:\s+(\d+-\d+-\d+)', text)
+            if m:
                 self._item['size'] = m.group(1)
                 self._item['date'] = m.group(2)
         elif len(self._tags) == 3 and self._tags[-1]['tag'] == 'b':
@@ -102,20 +117,22 @@ class SearchParser(HTMLParser):
             elif text[:1] == '.':
                 self._item['ext'] = text[1:]
         elif self._in_span:
-            m = re.match('(\d+) - (\d+)', text)
-            if m != None:
+            m = re.match(r'(\d+) - (\d+)', text)
+            if m:
                 self.index = int(m.group(1))
-            elif re.match('\d+$', text) != None:
+            elif re.match(r'\d+$', text):
                 self.total = int(text)
 
     def handle_data(self, data):
-        if self._text == None:
+        if self._text is None:
             self._text = data
         else:
             self._text += data
         
     def handle_entityref(self, name):
-        if name in name2codepoint:
+        if name == 'nbsp':
+            c = ' '
+        elif name in name2codepoint:
             c = unichr(name2codepoint[name])
         else:
             c = '&' + name
@@ -150,6 +167,7 @@ class LinkParser(HTMLParser):
             self.links = re.split('\s+', data.strip())
 
 if __name__ == '__main__':
+    # Parse command line
     host = '0.0.0.0'
     port = 8080
     reload = False
@@ -162,4 +180,6 @@ if __name__ == '__main__':
             port = int(arg)
         else:
             host = arg
+
+    # Run server
     bottle.run(app, host=host, port=port, reloader=reload)
