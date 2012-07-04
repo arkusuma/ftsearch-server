@@ -11,6 +11,10 @@ from htmlentitydefs import name2codepoint
 
 app = bottle.Bottle()
 
+@app.route('/')
+def home():
+    return '<h2>Hello World!</h2><p>Nothing to be viewed here.</p>'
+
 @app.route('/api/search')
 def search():
     resp = urllib2.urlopen(
