@@ -17,9 +17,8 @@ import sys
 import json
 import re
 
-from urllib2 import urlopen, URLError, HTTPError
-from HTMLParser import HTMLParser, HTMLParseError
-from htmlentitydefs import name2codepoint
+from urllib2 import urlopen
+from bs4 import BeautifulSoup
 
 app = bottle.Bottle()
 
@@ -33,13 +32,29 @@ def search():
         # load search result
         query = request.query_string
         resp = urlopen('http://www.filestube.com/search.html?%s' % query)
-        html = resp.read().decode('utf-8')
+        html = resp.read().decode('utf-8').replace('&nbsp;', ' ')
+
         # parse
-        parser = SearchParser()
-        parser.feed(html)
-        result = {'total': parser.total, 'index': parser.index, 'items': parser.items}
-    except (URLError, HTTPError, HTMLParseError):
-        result = {'total': 0}
+        soup = BeautifulSoup(html)
+        tags = soup.select('.book3 span')
+        index = int(tags[0].string.split(' - ')[0])
+        total = int(tags[1].string)
+        items = []
+        for tag in soup.select('.resultsLink'):
+            text = tag.find_next_sibling('div').get_text().strip()
+            m = re.match(r'(\S+)\s+ext:\s+\.(\S+).*?(\d+ [KMG]B)\s+date:\s+(\S+)', text)
+            if m:
+                item = {}
+                item['id'] = tag['href'].replace('http://www.filestube.com/', '')
+                item['title'] = tag.get_text()
+                item['site'] = m.group(1)
+                item['ext'] = m.group(2)
+                item['size'] = m.group(3)
+                item['date'] = m.group(4)
+                items.append(item)
+        result = {'total': total, 'index': index, 'items': items}
+    except:
+        result = {'total': 0, 'index': 0, 'items': []}
     response.content_type = 'application/json'
     return json.dumps(result)
 
@@ -49,132 +64,18 @@ def link(id):
         # load download link
         resp = urlopen('http://www.filestube.com/%s' % id)
         html = resp.read().decode('utf-8')
+
         # parse
-        parser = LinkParser()
-        parser.feed(html)
+        soup = BeautifulSoup(html)
+        names = [tag['title'] for tag in soup.select('.mainltb2 a')]
+        sizes = [tag.string for tag in soup.select('.tright')]
+        links = re.split(r'\s+', soup.pre.string.strip())
         result = [{'name': name, 'size': size, 'link': link} \
-                for name, size, link in \
-                zip(parser.names, parser.sizes, parser.links)]
-    except (URLError, HTTPError, HTMLParseError):
+                for name, size, link in zip(names, sizes, links)]
+    except:
         result = []
     response.content_type = 'application/json'
     return json.dumps(result)
-
-class SearchParser(HTMLParser):
-    def __init__(self):
-        HTMLParser.__init__(self)
-        self.items = []
-        self.index = 0
-        self.total = 0
-        self._tags = []
-        self._item = None
-        self._text = None
-        self._in_book3 = False
-        self._in_span = False
-
-    def handle_starttag(self, tag, attrs):
-        attrs = dict(attrs)
-        if self._text is not None:
-            self._handle_text()
-        if tag == 'div' and attrs.get('id') == 'newresult':
-            self._item = {}
-        elif self._item is not None:
-            self._tags.append({'tag': tag, 'attrs': attrs})
-            if tag == 'a' and len(self._tags) == 1:
-                href = attrs.get('href', '')
-                self._item['id'] = href.replace('http://www.filestube.com/', '')
-        elif tag == 'div' and attrs.get('class') == 'book3':
-            self._in_book3 = True
-        elif self._in_book3 and tag == 'span':
-            self._in_span = True
-
-    def handle_endtag(self, tag):
-        if self._text is not None:
-            self._handle_text()
-        if self._item is not None:
-            if len(self._tags) == 0:
-                self.items.append(self._item)
-                self._item = None
-            else:
-                self._tags.pop()
-        elif self._in_span:
-            self._in_span = False
-        elif self._in_book3 and tag == 'div':
-            self._in_book3 = False
-
-    def _handle_text(self):
-        text = self._text
-        self._text = None
-        if len(self._tags) == 1 and self._tags[-1]['tag'] == 'a':
-            self._item['title'] = text
-        elif len(self._tags) == 2 and self._tags[-1]['tag'] == 'span':
-            m = re.search(r'(\d+ [KMG]B)\s+date:\s+(\d+-\d+-\d+)', text)
-            if m:
-                self._item['size'] = m.group(1)
-                self._item['date'] = m.group(2)
-        elif len(self._tags) == 3 and self._tags[-1]['tag'] == 'b':
-            if 'style' in self._tags[-1]['attrs']:
-                self._item['site'] = text
-            elif text[:1] == '.':
-                self._item['ext'] = text[1:]
-        elif self._in_span:
-            m = re.match(r'(\d+) - (\d+)', text)
-            if m:
-                self.index = int(m.group(1))
-            elif re.match(r'\d+$', text):
-                self.total = int(text)
-
-    def handle_data(self, data):
-        if self._text is None:
-            self._text = data
-        else:
-            self._text += data
-        
-    def handle_entityref(self, name):
-        if name == 'nbsp':
-            c = ' '
-        elif name in name2codepoint:
-            c = unichr(name2codepoint[name])
-        else:
-            c = '&' + name
-        self.handle_data(c)
-        
-    def handle_charref(self, name):
-        if name.startswith('x'):
-            c = unichr(int(name[1:], 16))
-        else:
-            c = unichr(int(name))
-        self.handle_data(c)
-
-class LinkParser(HTMLParser):
-    def __init__(self):
-        HTMLParser.__init__(self)
-        self.names = []
-        self.links = []
-        self.sizes = []
-        self._in_pre = False
-        self._in_td = False
-
-    def handle_starttag(self, tag, attrs):
-        first_attr = attrs[0][0] if len(attrs) > 0 else ''
-        attrs = dict(attrs)
-        if tag == 'a' and first_attr == 'title':
-            self.names.append(attrs['title'])
-        elif tag == 'pre':
-            self._in_pre = True
-        elif tag == 'td' and attrs['class'] == "tright alt_width3":
-            self._in_td = True
-
-    def handle_endtag(self, tag):
-        # our <pre> an <td> are innermost tag
-        self._in_pre = False
-        self._in_td = False
-
-    def handle_data(self, data):
-        if self._in_pre:
-            self.links = re.split('\s+', data.strip())
-        elif self._in_td:
-            self.sizes.append(data)
 
 if __name__ == '__main__':
     # Parse command line
