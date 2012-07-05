@@ -42,15 +42,16 @@ def search():
         items = []
         for tag in soup.select('.resultsLink'):
             text = tag.find_next_sibling('div').get_text().strip()
-            m = re.match(r'(\S+)\s+ext:\s+\.(\S+).*?(\d+ [KMG]B)\s+date:\s+(\S+)', text)
+            m = re.match(r'(\S+)\s+ext:\s+\.(\S+)(\s+parts:\s+(\d+))?\s+(\d+ [KMG]B)\s+date:\s+(\S+)', text)
             if m:
                 item = {}
                 item['id'] = tag['href'].replace('http://www.filestube.com/', '')
                 item['title'] = tag.get_text()
                 item['site'] = m.group(1)
                 item['ext'] = m.group(2)
-                item['size'] = m.group(3)
-                item['date'] = m.group(4)
+                item['parts'] = int(m.group(4)) if m.group(4) else 1
+                item['size'] = m.group(5)
+                item['date'] = m.group(6)
                 items.append(item)
         result = {'total': total, 'index': index, 'items': items}
     except:
