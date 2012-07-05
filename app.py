@@ -52,8 +52,9 @@ def link(id):
         # parse
         parser = LinkParser()
         parser.feed(html)
-        result = [{'name': name, 'link': link} \
-                for name, link in zip(parser.names, parser.links)]
+        result = [{'name': name, 'size': size, 'link': link} \
+                for name, size, link in \
+                zip(parser.names, parser.sizes, parser.links)]
     except (URLError, HTTPError, HTMLParseError):
         result = []
     response.content_type = 'application/json'
@@ -150,21 +151,30 @@ class LinkParser(HTMLParser):
         HTMLParser.__init__(self)
         self.names = []
         self.links = []
+        self.sizes = []
         self._in_pre = False
+        self._in_td = False
 
     def handle_starttag(self, tag, attrs):
-        if tag == 'a' and len(attrs) > 0 and attrs[0][0] == 'title':
-            self.names.append(attrs[0][1])
+        first_attr = attrs[0][0] if len(attrs) > 0 else ''
+        attrs = dict(attrs)
+        if tag == 'a' and first_attr == 'title':
+            self.names.append(attrs['title'])
         elif tag == 'pre':
             self._in_pre = True
+        elif tag == 'td' and attrs['class'] == "tright alt_width3":
+            self._in_td = True
 
     def handle_endtag(self, tag):
-        if tag == 'pre':
-            self._in_pre = False
+        # our <pre> an <td> are innermost tag
+        self._in_pre = False
+        self._in_td = False
 
     def handle_data(self, data):
         if self._in_pre:
             self.links = re.split('\s+', data.strip())
+        elif self._in_td:
+            self.sizes.append(data)
 
 if __name__ == '__main__':
     # Parse command line
