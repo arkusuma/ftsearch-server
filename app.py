@@ -41,6 +41,8 @@ def search():
         total = int(tags[1].string)
         items = []
         for tag in soup.select('.resultsLink'):
+            if 'class' in tag.parent.attrs:
+                continue
             text = tag.find_next_sibling('div').get_text().strip()
             m = re.match(r'(\S+)\s+ext:\s+\.(\S+)(\s+parts:\s+(\d+))?\s+(\d+ [KMG]B)\s+date:\s+(\S+)', text)
             if m:
