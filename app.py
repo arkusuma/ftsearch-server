@@ -46,10 +46,15 @@ def search():
             text = tag.find_next_sibling('div').get_text().strip()
             m = re.match(r'(\S+)\s+ext:\s+\.(\S+)(\s+parts:\s+(\d+))?\s+(\d+ [KMG]B)\s+date:\s+(\S+)', text)
             if m:
+                site = m.group(1)
+                m2 = re.search(r'\.([^.]+\.[^.]+)$', site)
+                if m2:
+                    site = m2.group(1)
+
                 item = {}
                 item['id'] = tag['href'].replace('http://www.filestube.com/', '')
                 item['title'] = tag.get_text()
-                item['site'] = m.group(1)
+                item['site'] = site
                 item['ext'] = m.group(2)
                 item['parts'] = int(m.group(4)) if m.group(4) else 1
                 item['size'] = m.group(5)
