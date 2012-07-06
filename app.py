@@ -35,7 +35,7 @@ def search():
         html = resp.read().decode('utf-8').replace('&nbsp;', ' ')
 
         # parse
-        soup = BeautifulSoup(html)
+        soup = BeautifulSoup(html, 'lxml')
         tags = soup.select('.book3 span')
         index = int(tags[0].string.split(' - ')[0])
         total = int(tags[1].string)
@@ -67,7 +67,7 @@ def link(id):
         html = resp.read().decode('utf-8')
 
         # parse
-        soup = BeautifulSoup(html)
+        soup = BeautifulSoup(html, 'lxml')
         names = [tag['title'] for tag in soup.select('.mainltb2 a')]
         sizes = [tag.string for tag in soup.select('.tright')]
         links = re.split(r'\s+', soup.pre.string.strip())
