@@ -22,6 +22,8 @@ from bs4 import BeautifulSoup
 
 app = bottle.Bottle()
 
+DEFAULT_HOSTING = '23,1,15,13,22,27,25,34,12,8,10,9,28,2,31,36,35,37,40,42,11,47,50,51,55,54,59,60,61,62,63,64,65,67,68,69,70,71,72,73,74,75,77,79,80,81,82,83,84,85,86'
+
 @app.route('/')
 def home():
     return '<h2>Hello World!</h2><p>Nothing to be viewed here.</p>'
@@ -31,6 +33,8 @@ def search():
     try:
         # load search result
         query = request.query_string
+        if request.query.hosting == '':
+            query = '%s&hosting=%s' % (query, DEFAULT_HOSTING)
         resp = urlopen('http://www.filestube.com/search.html?%s' % query)
         html = resp.read().decode('utf-8').replace('&nbsp;', ' ')
 
