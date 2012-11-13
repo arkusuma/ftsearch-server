@@ -47,8 +47,8 @@ def search():
         for tag in soup.select('.resultsLink'):
             if 'class' in tag.parent.attrs:
                 continue
-            text = tag.find_next_sibling('div').get_text().strip()
-            m = re.match(r'(\S+)\s+ext:\s+\.(\S+)(\s+parts:\s+(\d+))?\s+(\d+ [KMG]B)\s+date:\s+([-\d]+)', text)
+            text = tag.find_next_sibling('div').div.span.get_text().strip()
+            m = re.match(r'(\S+)\s+ext:\s+\.(\S+)(\s+parts:\s+(\d+))?\s+(\d+ [KMG]B)\s+date:\s+(\S+)', text)
             if m:
                 site = m.group(1)
                 m2 = re.search(r'\.([^.]+\.[^.]+)$', site)
