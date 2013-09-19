@@ -35,7 +35,7 @@ def search():
         query = request.query_string
         if request.query.hosting == '':
             query = '%s&hosting=%s' % (query, DEFAULT_HOSTING)
-        resp = urlopen('http://www.filestube.com/search.html?%s' % query)
+        resp = urlopen('http://www.filestube.com/query.html?%s' % query)
         html = resp.read().decode('utf-8').replace('&nbsp;', ' ')
 
         # parse
